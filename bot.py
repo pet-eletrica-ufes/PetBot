@@ -59,4 +59,4 @@ async def atualizarFila(ctx):
             filaString += f'- {user.name}\n'
     await ctx.send(filaString)
 
-bot.run('MTA5Mjk2NTYwNDY3NzM5ODU0OA.Gndyjb.36cVtA2KpSRbP8uWdmt5J9gDncVuv0QmC-rdxc')
+bot.run('MTA5Mjk2NTYwNDY3NzM5ODU0OA.GMkNfp.67JxI2M1reZZHO5K_FlTPwwAtc0kIdkLuzLBGM')

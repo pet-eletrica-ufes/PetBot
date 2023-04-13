@@ -41,6 +41,10 @@ async def fila(ctx):
     await atualizarFila(ctx)
 
 @bot.command()
+async def mensagem(ctx):
+    await ctx.send(f'Olá Pessoal!\nMe chamo {bot.user.mention} e me encontro no servidor do PetCode para ajudar! \U0001F4A5\n\n\U0001F4A1 **Comandos:**\n\n- Se você quiser participar da monitoria, mande um **!monitoria** para entrar na fila e espere sua vez para ser atendido \U0001F60E\n\n- Se quiser sair da fila, mande **!sairfila** que eu te removerei. \U0001F44D\n\n- Se quiser acessar a lista da fila, mande **!fila**')
+
+@bot.command()
 async def sairfila(ctx):
     if ctx.author.id in filaMonitoria:
         filaMonitoria.remove(ctx.author.id)

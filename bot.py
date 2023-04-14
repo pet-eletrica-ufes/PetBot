@@ -7,6 +7,7 @@ intents.members = True
 bot = commands.Bot(command_prefix='!', case_insensitive = True, intents=intents)
 
 filaMonitoria = []
+duvidas = []
 
 
 @bot.event
@@ -52,6 +53,28 @@ async def sairfila(ctx):
         await atualizarFila(ctx)
     else:
         await ctx.send(f'{ctx.author.name}, você não está na fila de monitoria! Ka-chow!!!')
+
+@bot.command()
+async def duvida(ctx, *args):
+    duvida = ' '.join(args)
+    duvidas.append(duvida)
+    await ctx.send(f'{ctx.author.mention}, Sua dúvida foi recebida! Aguarde a resposta dos Monitores, que iremos te ajudar :) Ka-chow!!!')
+
+@bot.command()
+async def listaDuvidas(ctx):
+    string_de_duvidas = ''
+    for i in range(len(duvidas)):
+        string_de_duvidas += f'{i+1} - {duvidas[i]}\n'
+
+    if len(duvidas) < 1:
+        await ctx.send('Não há dúvidas no momento...\nCatchuga :(')
+    else:
+        await ctx.send(string_de_duvidas)
+
+@bot.command()
+async def DevClearLista(ctx):
+    for i in range(len(duvidas)):
+        duvidas.remove(duvidas[0])
 
 async def atualizarFila(ctx):
     filaString = 'Fila de monitoria:\n'

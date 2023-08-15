@@ -1,13 +1,108 @@
 import discord
 from discord.ext import commands
+import asyncio
+import requests
+import json
+import random
 
 intents = discord.Intents.all()
 intents.members = True
+intents.guilds = True
+intents.message_content = True
+intents.messages = True
 
 bot = commands.Bot(command_prefix='!', case_insensitive = True, intents=intents)
 
+# Lista de perguntas e respostas para o quiz
+quiz_data = [
+    {
+        'pergunta': 'Qual é a capital da França?',
+        'resposta': 'Paris'
+    },
+    {
+        'pergunta': 'Quantos planetas fazem parte do nosso sistema solar?',
+        'resposta': '8'
+    },
+    {
+        'pergunta': 'Qual ferramenta é usada para realizar um loop condicional?',
+        'resposta': 'For Loop'
+    },
+    # Adicione mais perguntas e respostas aqui
+]
+
 filaMonitoria = []
 duvidas = []
+
+role_message_id = 0  # ID da mensagem que vai conter as reações
+emoji_to_role = {
+    discord.PartialEmoji(name='🔴'): 0,  # ID do cargo associado com o emoji '🔴'.
+    discord.PartialEmoji(name='🟢'): 0,  # ID do cargo associado com o emoji '🟢'.
+    discord.PartialEmoji(name='🔵'): 0,  # ID do cargo associado com o emoji '🔵'.
+    }
+
+@bot.event
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+    """da o cargo baseado no emoji de reacao"""
+    if payload.message_id != role_message_id:
+        return
+
+    guild = bot.get_guild(payload.guild_id)
+    if guild is None:
+        return
+
+    try:
+        role_id = emoji_to_role[payload.emoji]
+    except KeyError:
+        return
+
+    role = guild.get_role(role_id)
+    if role is None:
+        return
+
+    member = guild.get_member(payload.user_id)
+    if member is None:
+        return
+
+    try:
+        await member.add_roles(role)
+        print("Cargo Atribuido Corretamente")
+    except discord.HTTPException as e:
+        print(f"Um erro ocorreu: {e}")
+
+@bot.event
+async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
+    """tira o cargo baseado no emoji de reacao"""
+    if payload.message_id != role_message_id:
+        return
+
+    guild = bot.get_guild(payload.guild_id)
+    if guild is None:
+        return
+
+    try:
+        role_id = emoji_to_role[payload.emoji]
+    except KeyError:
+        return
+
+    role = guild.get_role(role_id)
+    if role is None:
+        return
+
+    member = guild.get_member(payload.user_id)
+    if member is None:
+        return
+
+    try:
+        await member.remove_roles(role)
+        print("Cargo Removido Corretamente")
+    except discord.HTTPException:
+        pass
+
+def get_quote():
+    inspirar = requests.get("https://zenquotes.io/api/random")
+    json_data = json.loads(inspirar.text)
+    quote = json_data[0]['q'] + " - " + json_data[0]['a']
+    return(quote)
 
 
 @bot.event
@@ -27,6 +122,25 @@ async def on_member_join(member):
 
     await asyncio.sleep(20)
     await mensagem.delete()
+
+@bot.command()
+async def inspirar(ctx):
+    quote = get_quote()
+    await ctx.send(quote)
+
+@bot.command()
+async def quiz(ctx):
+    pergunta_atual = random.choice(quiz_data)
+    await ctx.send(pergunta_atual['pergunta'])
+
+    def check_resposta(m):
+        return m.content == pergunta_atual['resposta'] and m.channel == ctx.channel and m.author != bot.user
+
+    try:
+        resposta = await bot.wait_for('message', timeout=30.0, check=check_resposta)
+        await ctx.send(f"Parabéns, {resposta.author.mention}! Você acertou!")
+    except TimeoutError:
+        await ctx.send("Tempo esgotado. A resposta correta era: " + pergunta_atual['resposta'])    
 
 @bot.command()
 async def monitoria(ctx):

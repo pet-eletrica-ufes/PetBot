@@ -128,19 +128,63 @@ async def inspirar(ctx):
     quote = get_quote()
     await ctx.send(quote)
 
+def load_user_points():
+    try:
+        with open('user_points.json', 'r') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+def save_user_points(user_points):
+    with open('user_points.json', 'w') as f:
+        json.dump(user_points, f, indent=4)
+
 @bot.command()
+@commands.has_role() #substituir 'nome do cargo' pelo nome do cargo
 async def quiz(ctx):
     pergunta_atual = random.choice(quiz_data)
     await ctx.send(pergunta_atual['pergunta'])
 
     def check_resposta(m):
-        return m.content == pergunta_atual['resposta'] and m.channel == ctx.channel and m.author != bot.user
+        return (
+            m.content == pergunta_atual['resposta'] and
+            m.channel == ctx.channel and
+            m.author != bot.user and
+            m.author.id not in answered_users
+        )
 
-    try:
-        resposta = await bot.wait_for('message', timeout=30.0, check=check_resposta)
-        await ctx.send(f"Parabéns, {resposta.author.mention}! Você acertou!")
-    except TimeoutError:
-        await ctx.send("Tempo esgotado. A resposta correta era: " + pergunta_atual['resposta'])    
+    answered_users = set()  # guarda os id de quem
+
+    user_points = load_user_points()  # carrega pontos do json
+
+    pontos = 10 
+    while pontos >= 1:
+        try:
+            resposta = await bot.wait_for('message', timeout=30.0, check=check_resposta)
+            user_id = resposta.author.id
+
+            # procura se o usuário já tem pontos
+            user_found = False
+            for user in user_points:
+                if user['user_id'] == user_id:
+                    user['points'] += pontos
+                    user_found = True
+                    break
+
+            # se não encontrou, cria um novo registro
+            if not user_found:
+                user_points.append({"user_id": user_id, "points": pontos})
+
+            save_user_points(user_points)  # salva no json
+
+            await ctx.send(f"Parabéns, {resposta.author.mention}! Você acertou e ganhou {pontos} pontos! "
+               f"Total acumulado: {next(user['points'] for user in user_points if user['user_id'] == user_id)} pontos")
+
+            pontos -= 1
+            answered_users.add(user_id)  # Add user ID to the set
+        except TimeoutError:
+            await ctx.send("Tempo esgotado. A resposta correta era: " + pergunta_atual['resposta'])
+            break   
 
 @bot.command()
 async def monitoria(ctx):

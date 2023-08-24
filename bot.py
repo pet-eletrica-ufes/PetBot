@@ -33,70 +33,91 @@ quiz_data = [
 filaMonitoria = []
 duvidas = []
 
-role_message_id = 0  # ID da mensagem que vai conter as reações
+role_message_id1 = 1144262554705727558  # ID da mensagem para atribuir os cargos de linguagem de prog
+role_message_id2 = 1144272153336889364  # ID da mensagem para atribuir os cargos de regras lidas
 emoji_to_role = {
-    discord.PartialEmoji(name='🔴'): 0,  # ID do cargo associado com o emoji '🔴'.
-    discord.PartialEmoji(name='🟢'): 0,  # ID do cargo associado com o emoji '🟢'.
-    discord.PartialEmoji(name='🔵'): 0,  # ID do cargo associado com o emoji '🔵'.
-    }
+    1143905468918534254: 1143899809590292500,    # ID do Emoji : ID do cargo para Arduino
+    1143905591346069654: 1143899881375809668,    # ID do Emoji : ID do cargo para C
+    1143905329894142093: 1143895173055664198,    # ID do Emoji : ID do cargo para Python
+    1144275789823627304: 1144269762302574622,
+}
 
 @bot.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
-    """da o cargo baseado no emoji de reacao"""
-    if payload.message_id != role_message_id:
-        return
+    """Assign roles based on reaction emoji ID"""
+    if payload.message_id in [role_message_id1, role_message_id2]:  # Replace with your message IDs
+        guild = bot.get_guild(payload.guild_id)
+        if guild is None:
+            return
 
-    guild = bot.get_guild(payload.guild_id)
-    if guild is None:
-        return
+        role_id = emoji_to_role.get(payload.emoji.id)
+        if role_id is None:
+            return
 
-    try:
-        role_id = emoji_to_role[payload.emoji]
-    except KeyError:
-        return
+        role = guild.get_role(role_id)
+        if role is None:
+            return
 
-    role = guild.get_role(role_id)
-    if role is None:
-        return
+        member = guild.get_member(payload.user_id)
+        if member is None:
+            return
 
-    member = guild.get_member(payload.user_id)
-    if member is None:
-        return
+        try:
+            await member.add_roles(role)
+            print(f"Added role {role.name} to {member.name}")
+        except discord.HTTPException as e:
+            print(f"An error occurred: {e}")
 
-    try:
-        await member.add_roles(role)
-        print("Cargo Atribuido Corretamente")
-    except discord.HTTPException as e:
-        print(f"Um erro ocorreu: {e}")
 
 @bot.event
 async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
-    """tira o cargo baseado no emoji de reacao"""
-    if payload.message_id != role_message_id:
-        return
+    if payload.message_id in [role_message_id1, role_message_id2]:
+        guild = bot.get_guild(payload.guild_id)
+        if guild is None:
+            return
 
-    guild = bot.get_guild(payload.guild_id)
-    if guild is None:
-        return
+        role_id = emoji_to_role.get(payload.emoji.id)
+        if role_id is None:
+            return
 
-    try:
-        role_id = emoji_to_role[payload.emoji]
-    except KeyError:
-        return
+        role = guild.get_role(role_id)
+        if role is None:
+            return
 
-    role = guild.get_role(role_id)
-    if role is None:
-        return
+        member = guild.get_member(payload.user_id)
+        if member is None:
+            return
 
-    member = guild.get_member(payload.user_id)
-    if member is None:
-        return
+        try:
+            await member.remove_roles(role)
+            print(f"Removed role {role.name} from {member.name}")
+        except discord.HTTPException as e:
+            print(f"An error occurred: {e}")
 
-    try:
-        await member.remove_roles(role)
-        print("Cargo Removido Corretamente")
-    except discord.HTTPException:
-        pass
+@bot.command()
+async def send_message(ctx):
+    channel = bot.get_channel(1091452635728576672)
+    bot_channel = bot.get_channel(1096108547051360316)
+    
+    if channel:
+        message = ("💡- Regras \nQuebrar alguma dessas regras resultará num timeout ou ban do servidor \n\n"
+                   "💡Não é permitido a propaganda e divulgação de conteúdos não relacionados a programação nos chats. "
+                   "Sujeito a timeout ou ban do servidor.\n\n💡Não envie conteúdo NSFW. A postagem de Imagens, vídeos e "
+                   "outros conteúdos inapropriados no chat será penalizada com o ban instantâneo.\n\n💡Propague sempre o "
+                   "respeito no chat. Discussões inapropriadas de caráter ilegal e/ou preconceituoso e discriminatório "
+                   "garantirão banimento instantâneo dos envolvidos.\n\n💡Não ignore os avisos direcionados a você. "
+                   "Podemos estar abordando algo importante, fique atento.\n\n💡 Nicks ofensivos e discriminatórios "
+                   "garantirão banimento e/ou timeout dos usuários, até que o nome seja alterado.\n\n💡 Não contribua "
+                   "para o spam de mensagens no chat.\n\n💡 Não pingue ou marque monitores e coordenadores desnecessariamente, "
+                   "somente se necessário\n\n💡 Verifique se sua dúvida já foi feita e/ou respondida, evite o acúmulo de "
+                   "dúvidas semelhantes para que os demais participantes com dúvidas distintas também possam ser atendidos\n\n"
+                   "Caso esteja ciente das regras, reaja ao emoji abaixo e se encaminhe para o canal <#{}>."
+                   .format(bot_channel.id))
+        await channel.send(message)
+        print("Message sent to the specified channel.")
+    else:
+        await ctx.send("Channel not found.")
+    
 
 def get_quote():
     inspirar = requests.get("https://zenquotes.io/api/random")
@@ -140,7 +161,7 @@ def save_user_points(user_points):
         json.dump(user_points, f, indent=4)
 
 @bot.command()
-@commands.has_role() #substituir 'nome do cargo' pelo nome do cargo
+@commands.has_role('Monitores') #substituir 'nome do cargo' pelo nome do cargo
 async def quiz(ctx):
     pergunta_atual = random.choice(quiz_data)
     await ctx.send(pergunta_atual['pergunta'])
@@ -244,4 +265,4 @@ async def atualizarFila(ctx):
             filaString += f'- {user.name}\n'
     await ctx.send(filaString)
 
-bot.run('TOKEN')
+bot.run('Token')

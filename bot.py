@@ -10,6 +10,8 @@ intents.members = True
 intents.guilds = True
 intents.message_content = True
 intents.messages = True
+intents.typing = False
+intents.presences = False
 
 bot = commands.Bot(command_prefix='!', case_insensitive = True, intents=intents)
 
@@ -39,7 +41,7 @@ emoji_to_role = {
     1143905468918534254: 1143899809590292500,    # ID do Emoji : ID do cargo para Arduino
     1143905591346069654: 1143899881375809668,    # ID do Emoji : ID do cargo para C
     1143905329894142093: 1143895173055664198,    # ID do Emoji : ID do cargo para Python
-    1144275789823627304: 1144269762302574622,
+    1144275789823627304: 1144269762302574622,    # ID do Emoji : ID do cargo para Membros
 }
 
 @bot.event
@@ -128,6 +130,7 @@ def get_quote():
 
 @bot.event
 async def on_ready():
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name='!ajuda p/ ver comandos'))
     print(f'{bot.user.name} está pronto para ser utilizado!')
     
 @bot.event
@@ -137,7 +140,7 @@ async def on_message(message):
 
 @bot.event
 async def on_member_join(member):
-    welcome_channel = bot.get_channel(1091452635728576676)
+    welcome_channel = bot.get_channel(1144664343846334504)
     regras = bot.get_channel(1091452635728576672)
     mensagem = await welcome_channel.send(f"Bem vindo {member.mention}!\nLeia as regras em {regras.mention} ;)")
 
@@ -161,7 +164,7 @@ def save_user_points(user_points):
         json.dump(user_points, f, indent=4)
 
 @bot.command()
-@commands.has_role('Monitores') #substituir 'nome do cargo' pelo nome do cargo
+@commands.has_role('Monitores')
 async def quiz(ctx):
     pergunta_atual = random.choice(quiz_data)
     await ctx.send(pergunta_atual['pergunta'])
@@ -174,38 +177,42 @@ async def quiz(ctx):
             m.author.id not in answered_users
         )
 
-    answered_users = set()  # guarda os id de quem
+    answered_users = set()
+    user_points = load_user_points()
+    pontos = 10
 
-    user_points = load_user_points()  # carrega pontos do json
-
-    pontos = 10 
     while pontos >= 1:
         try:
             resposta = await bot.wait_for('message', timeout=30.0, check=check_resposta)
             user_id = resposta.author.id
+            user = bot.get_user(user_id)  # Get user object
 
-            # procura se o usuário já tem pontos
-            user_found = False
-            for user in user_points:
-                if user['user_id'] == user_id:
-                    user['points'] += pontos
-                    user_found = True
-                    break
+            if user:
+                dm_channel = await user.create_dm()  # Create a private message channel
 
-            # se não encontrou, cria um novo registro
-            if not user_found:
-                user_points.append({"user_id": user_id, "points": pontos})
+                user_found = False
+                for user_data in user_points:
+                    if user_data['user_id'] == user_id:
+                        user_data['points'] += pontos
+                        user_found = True
+                        break
 
-            save_user_points(user_points)  # salva no json
 
-            await ctx.send(f"Parabéns, {resposta.author.mention}! Você acertou e ganhou {pontos} pontos! "
-               f"Total acumulado: {next(user['points'] for user in user_points if user['user_id'] == user_id)} pontos")
+                if not user_found:
+                    user_points.append({"user_id": user_id, "points": pontos})
 
-            pontos -= 1
-            answered_users.add(user_id)  # Add user ID to the set
+                save_user_points(user_points)
+
+                await dm_channel.send(f"Parabéns, {user.mention}! Você acertou e ganhou {pontos} pontos! "
+                                      f"Total acumulado: {next(user['points'] for user in user_points if user['user_id'] == user_id)} pontos")
+
+                pontos -= 1
+                answered_users.add(user_id)
         except TimeoutError:
             await ctx.send("Tempo esgotado. A resposta correta era: " + pergunta_atual['resposta'])
-            break   
+            break
+
+
 
 @bot.command()
 async def monitoria(ctx):
@@ -221,7 +228,7 @@ async def fila(ctx):
     await atualizarFila(ctx)
 
 @bot.command()
-async def mensagem(ctx):
+async def ajuda(ctx):
     await ctx.send(f'Olá Pessoal!\nMe chamo {bot.user.mention} e me encontro no servidor do PetCode para ajudar! \U0001F4A5\n\n\U0001F4A1 **Comandos:**\n\n- Se você quiser participar da monitoria, mande um **!monitoria** para entrar na fila e espere sua vez para ser atendido \U0001F60E\n\n- Se quiser sair da fila, mande **!sairfila** que eu te removerei. \U0001F44D\n\n- Se quiser acessar a lista da fila, mande **!fila**')
 
 @bot.command()
@@ -251,6 +258,7 @@ async def listaDuvidas(ctx):
         await ctx.send(string_de_duvidas)
 
 @bot.command()
+@commands.has_role('Coordenadores')
 async def DevClearLista(ctx):
     for i in range(len(duvidas)):
         duvidas.remove(duvidas[0])

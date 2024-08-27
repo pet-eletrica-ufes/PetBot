@@ -144,7 +144,7 @@ async def on_member_join(member):
     regras = bot.get_channel(1091452635728576672)
     mensagem = await welcome_channel.send(f"Bem vindo {member.mention}!\nLeia as regras em {regras.mention} ;)")
 
-    await asyncio.sleep(20)
+    await asyncio.sleep(120)
     await mensagem.delete()
 
 @bot.command()
@@ -169,48 +169,73 @@ async def quiz(ctx):
     pergunta_atual = random.choice(quiz_data)
     await ctx.send(pergunta_atual['pergunta'])
 
+    user_points = load_user_points()
+    responded_users = set()  # Conjunto para rastrear quem já respondeu
+    max_responses = 5  # Máximo de respostas aceitas por pergunta (pode ser ajustado)
+
     def check_resposta(m):
         return (
-            m.content == pergunta_atual['resposta'] and
             m.channel == ctx.channel and
             m.author != bot.user and
-            m.author.id not in answered_users
+            m.author.id not in responded_users  # Verifica se o usuário já respondeu
         )
 
-    answered_users = set()
-    user_points = load_user_points()
-    pontos = 10
+    respostas_corretas = 0
 
-    while pontos >= 1:
-        try:
+    try:
+        while respostas_corretas < max_responses:
             resposta = await bot.wait_for('message', timeout=30.0, check=check_resposta)
             user_id = resposta.author.id
-            user = bot.get_user(user_id)  # Get user object
+            user = bot.get_user(user_id)
 
-            if user:
-                dm_channel = await user.create_dm()  # Create a private message channel
+            if resposta.content.lower() == pergunta_atual['resposta'].lower():
+                respostas_corretas += 1
+                responded_users.add(user_id)  # Marca o usuário como já tendo respondido
 
+                # Atualiza os pontos do usuário
                 user_found = False
                 for user_data in user_points:
                     if user_data['user_id'] == user_id:
-                        user_data['points'] += pontos
+                        user_data['points'] += 1
                         user_found = True
                         break
 
-
                 if not user_found:
-                    user_points.append({"user_id": user_id, "points": pontos})
+                    user_points.append({"user_id": user_id, "points": 1})
 
                 save_user_points(user_points)
 
-                await dm_channel.send(f"Parabéns, {user.mention}! Você acertou e ganhou {pontos} pontos! "
-                                      f"Total acumulado: {next(user['points'] for user in user_points if user['user_id'] == user_id)} pontos")
+                # Envia mensagem privada ao usuário
+                total_pontos = next(user['points'] for user in user_points if user['user_id'] == user_id)
+                dm_channel = await user.create_dm()
+                await dm_channel.send(f"Parabéns, {user.mention}! Você acertou e ganhou 1 ponto! "
+                                      f"Total acumulado: {total_pontos} pontos")
 
-                pontos -= 1
-                answered_users.add(user_id)
-        except TimeoutError:
-            await ctx.send("Tempo esgotado. A resposta correta era: " + pergunta_atual['resposta'])
-            break
+            else:
+                responded_users.add(user_id)  # Marca o usuário, mesmo com resposta incorreta
+                await ctx.send(f"{resposta.author.mention} errou! A resposta correta é {pergunta_atual['resposta']}.")
+
+    except asyncio.TimeoutError:
+        await ctx.send("Tempo esgotado! O quiz terminou.")
+
+    if respostas_corretas == max_responses:
+        await ctx.send("Número máximo de respostas corretas alcançado! O quiz terminou.")
+
+@bot.command()
+async def pontos(ctx):
+    """
+    Comando para usuários consultarem seus pontos acumulados.
+    """
+    user_points = load_user_points()
+    user_id = ctx.author.id
+    user = bot.get_user(user_id)
+
+    if user:
+        pontos_user = next((user['points'] for user in user_points if user['user_id'] == user_id), 0)
+        await ctx.send(f"{user.mention}, você tem {pontos_user} pontos acumulados no quiz!")
+    else:
+        await ctx.send("Não foi possível encontrar suas informações.")
+
 
 
 
@@ -229,7 +254,39 @@ async def fila(ctx):
 
 @bot.command()
 async def ajuda(ctx):
-    await ctx.send(f'Olá Pessoal!\nMe chamo {bot.user.mention} e me encontro no servidor do PetCode para ajudar! \U0001F4A5\n\n\U0001F4A1 **Comandos:**\n\n- Se você quiser participar da monitoria, mande um **!monitoria** para entrar na fila e espere sua vez para ser atendido \U0001F60E\n\n- Se quiser sair da fila, mande **!sairfila** que eu te removerei. \U0001F44D\n\n- Se quiser acessar a lista da fila, mande **!fila**')
+    """
+    Envia uma mensagem explicando os comandos disponíveis e como utilizá-los.
+    """
+    ajuda_message = (
+        f"Olá Pessoal!\nMe chamo {bot.user.mention} e estou aqui no servidor do PetCode para ajudar! 💥\n\n"
+        f"💡 **Comandos Disponíveis:**\n\n"
+        f"**!monitoria** - Entra na fila de monitoria para receber ajuda. Você será atendido na ordem da fila. 😎\n"
+        f"**!sairfila** - Sai da fila de monitoria caso você não precise mais de ajuda. 👍\n"
+        f"**!fila** - Mostra a lista atual de pessoas na fila de monitoria. 📋\n"
+        f"**!duvida [sua dúvida]** - Envia uma dúvida específica para os monitores responderem. 🔍\n"
+        f"**!listaDuvidas** - Exibe a lista de dúvidas que foram enviadas e estão aguardando resposta. 📜\n"
+        f"**!listaDuvidasResolvidas** - Exibe a lista de dúvidas que já foram resolvidas. ✅\n\n"
+        f"Para mais informações, você pode sempre digitar **!ajuda**."
+    )
+    await ctx.send(ajuda_message)
+
+@bot.command()
+@commands.has_any_role('Coordenadores', 'Monitores')
+async def ajuda_admin(ctx):
+    """
+    Envia uma mensagem com os comandos disponíveis para administradores, coordenadores e monitores.
+    """
+    ajuda_admin_message = (
+        f"👮 **Comandos Administrativos Disponíveis:**\n\n"
+        f"**!removerDuvida [número]** - Remove uma dúvida da lista de dúvidas ativas. Use o número da dúvida na lista. 🗑️\n"
+        f"**!marcarResolvida [número]** - Marca uma dúvida como resolvida e a move para a lista de dúvidas resolvidas. ✅\n"
+        f"**!DevClearListaDuvidas** - Limpa completamente a lista de dúvidas ativas. ⚠️ Use com cuidado! ⚠️\n"
+        f"**!DevClearListaResolvidas** - Limpa completamente a lista de dúvidas resolvidas. ⚠️ Use com cuidado! ⚠️\n"
+        f"**!quiz** - Inicia um quiz para os membros do servidor responderem. 🧠\n"
+        f"\nEsses comandos são restritos a coordenadores e monitores para gerenciamento eficaz do servidor."
+    )
+    await ctx.send(ajuda_admin_message)
+
 
 @bot.command()
 async def sairfila(ctx):
@@ -257,11 +314,59 @@ async def listaDuvidas(ctx):
     else:
         await ctx.send(string_de_duvidas)
 
+# Nova lista para armazenar dúvidas resolvidas
+duvidas_resolvidas = []
+
+@bot.command()
+@commands.has_role('Monitores')
+async def removerDuvida(ctx, numero: int):
+    """
+    Remove uma dúvida específica da lista pelo seu número.
+    """
+    if 1 <= numero <= len(duvidas):
+        duvida_removida = duvidas.pop(numero - 1)
+        await ctx.send(f'A dúvida "{duvida_removida}" foi removida da lista! Ka-chow!!!')
+        await atualizarFila(ctx)  # Se necessário atualizar a fila de monitoria
+    else:
+        await ctx.send(f'Número inválido. Por favor, escolha um número entre 1 e {len(duvidas)}.')
+
+@bot.command()
+@commands.has_role('Monitores')
+async def marcarResolvida(ctx, numero: int):
+    """
+    Marca uma dúvida como resolvida e a move para uma lista de dúvidas resolvidas.
+    """
+    if 1 <= numero <= len(duvidas):
+        duvida_resolvida = duvidas.pop(numero - 1)
+        duvidas_resolvidas.append(duvida_resolvida)
+        await ctx.send(f'A dúvida "{duvida_resolvida}" foi marcada como resolvida e movida da lista! Ka-chow!!!')
+    else:
+        await ctx.send(f'Número inválido. Por favor, escolha um número entre 1 e {len(duvidas)}.')
+
+@bot.command()
+async def listaDuvidasResolvidas(ctx):
+    """
+    Lista todas as dúvidas que foram marcadas como resolvidas.
+    """
+    if len(duvidas_resolvidas) == 0:
+        await ctx.send('Não há dúvidas resolvidas até o momento... Ka-chow!!!')
+    else:
+        string_de_duvidas_resolvidas = 'Dúvidas resolvidas:\n'
+        for i, duvida in enumerate(duvidas_resolvidas, start=1):
+            string_de_duvidas_resolvidas += f'{i} - {duvida}\n'
+        await ctx.send(string_de_duvidas_resolvidas)
+
 @bot.command()
 @commands.has_role('Coordenadores')
-async def DevClearLista(ctx):
+async def DevClearListaDuvidas(ctx):
     for i in range(len(duvidas)):
         duvidas.remove(duvidas[0])
+
+@bot.command()
+@commands.has_role('Coordenadores')
+async def DevClearListaResolvidas(ctx):
+    for i in range(len(duvidas_resolvidas)):
+        duvidas_resolvidas.remove(duvidas_resolvidas[0])
 
 async def atualizarFila(ctx):
     filaString = 'Fila de monitoria:\n'
@@ -273,4 +378,27 @@ async def atualizarFila(ctx):
             filaString += f'- {user.name}\n'
     await ctx.send(filaString)
 
-bot.run('Token')
+@bot.event
+async def on_message(message):
+    # Verifica se a mensagem veio de um DM e se contém anexos
+    if isinstance(message.channel, discord.DMChannel) and message.attachments:
+        # Envia uma confirmação ao usuário
+        await message.channel.send("Arquivo recebido! Enviarei para o canal adequado.")
+        
+        # Especifica o ID do canal no servidor onde os arquivos serão enviados
+        target_channel_id = 1278055577100226682  # Substitua pelo ID do canal desejado
+        target_channel = bot.get_channel(target_channel_id)
+
+        if target_channel is not None:
+            for attachment in message.attachments:
+                # Envia o arquivo ao canal especificado
+                await target_channel.send(f"Arquivo enviado por {message.author}:", file=await attachment.to_file())
+            await message.channel.send("Arquivo enviado com sucesso!")
+        else:
+            await message.channel.send("Ocorreu um erro ao tentar enviar o arquivo. Canal não encontrado.")
+    else:
+        # Processa outros comandos e mensagens
+        await bot.process_commands(message)
+
+
+bot.run('token')
